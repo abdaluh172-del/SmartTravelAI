@@ -1,0 +1,133 @@
+{% extends "_base.html" %}
+{% block title %}مساعد السفر الذكي — رحلاتي الذكية{% endblock %}
+{% block content %}
+
+<section class="assistant-hero">
+  <div class="container">
+    <h1>🤖 مساعد السفر الذكي</h1>
+    <p>دعنا نساعدك في اكتشاف وجهتك وتخطيط رحلتك بالكامل خطوة بخطوة.</p>
+  </div>
+</section>
+
+<div class="container">
+  <div class="assistant-options">
+    <div class="assistant-option-card">
+      <div class="emoji">📍</div>
+      <h3>الأماكن المشهورة</h3>
+      <p>اكتشف أشهر الأماكن التي تستحق الزيارة في وجهتك</p>
+      <div class="field"><input type="text" id="placesDestination" placeholder="اكتب اسم الوجهة"></div>
+      <button class="btn btn-outline btn-block" id="placesBtn">اعرض الأماكن</button>
+    </div>
+    <div class="assistant-option-card">
+      <div class="emoji">🗓️</div>
+      <h3>خطط لي رحلتي</h3>
+      <p>أدخل تفاصيل رحلتك وسننشئ لك جدولًا يوميًا كاملاً</p>
+      <a href="/planner" class="btn btn-primary btn-block">ابدأ التخطيط</a>
+    </div>
+  </div>
+
+  <section class="section" style="text-align:center;">
+    <h2 class="section-title">✨ أو دعنا نخطط لك كل شيء دفعة واحدة</h2>
+    <p class="section-sub">اكتب طلبك بأسلوبك الطبيعي وسيقوم الذكاء الاصطناعي بالباقي</p>
+    <div class="search-card" style="margin:0 auto;">
+      <div class="field full">
+        <label for="fullTripPrompt">صف رحلتك</label>
+        <textarea id="fullTripPrompt" placeholder="مثال: أبي أسافر 5 أيام وميزانيتي 5000 ريال وأبي أماكن سياحية ومطاعم وتجارب."></textarea>
+      </div>
+      <div class="form-grid" style="margin-top:12px;">
+        <div class="field">
+          <label for="fullTripDestination">الوجهة (اختياري)</label>
+          <input type="text" id="fullTripDestination" placeholder="مثال: إسطنبول">
+        </div>
+        <div class="field">
+          <label for="fullTripType">نوع الرحلة</label>
+          <select id="fullTripType">
+            <option value="فردية">فردية</option>
+            <option value="عائلية">عائلية</option>
+            <option value="أصدقاء">أصدقاء</option>
+            <option value="عمل">عمل</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-block" id="fullPlanBtn" style="margin-top:16px;">✨ خطط رحلتي بالكامل</button>
+    </div>
+  </section>
+
+  <div id="placesResult"></div>
+  <div id="fullPlanResult"></div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("destination")) document.getElementById("placesDestination").value = params.get("destination");
+
+  document.getElementById("placesBtn").addEventListener("click", async () => {
+    const dest = document.getElementById("placesDestination").value.trim();
+    const box = document.getElementById("placesResult");
+    if (!dest) { box.innerHTML = `<div class="alert alert-error">الرجاء إدخال اسم الوجهة</div>`; return; }
+    box.innerHTML = `<div class="loading-spinner"></div>`;
+    try {
+      const data = await Api.popularPlaces(dest);
+      box.innerHTML = `
+        <div class="section">
+          <h3 class="section-title">📍 أشهر الأماكن في ${data.destination}</h3>
+          <div class="places-grid">
+            ${data.places.map(p => `<div class="place-chip">${p}</div>`).join("")}
+          </div>
+        </div>`;
+    } catch (e) {
+      box.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+    }
+  });
+
+  document.getElementById("fullPlanBtn").addEventListener("click", async () => {
+    const prompt = document.getElementById("fullTripPrompt").value.trim();
+    const destination = document.getElementById("fullTripDestination").value.trim();
+    const tripType = document.getElementById("fullTripType").value;
+    const box = document.getElementById("fullPlanResult");
+    if (!prompt) { box.innerHTML = `<div class="alert alert-error">الرجاء وصف رحلتك أولًا</div>`; return; }
+    box.innerHTML = `<div class="loading-spinner"></div>`;
+    try {
+      const plan = await Api.planFullTrip({ prompt, destination, trip_type: tripType });
+      box.innerHTML = renderPlanHtml(plan);
+    } catch (e) {
+      box.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+    }
+  });
+});
+
+function renderPlanHtml(plan) {
+  const days = (plan.daily_plan || []).map(day => `
+    <div class="day-block">
+      <div class="day-block-header">${day.title}</div>
+      <div class="day-block-body">
+        ${day.blocks.map(b => `<div class="day-item"><span class="time-tag">${b.time}</span><span>${b.activity}</span></div>`).join("")}
+      </div>
+    </div>
+  `).join("");
+
+  const budget = plan.budget_breakdown || {};
+  const labels = { flights: "الطيران", hotel: "الفندق", food: "الطعام", transport: "المواصلات", activities: "الأنشطة" };
+  const budgetItems = Object.entries(labels).map(([k, lbl]) => budget[k] !== undefined ?
+    `<div class="budget-item"><div class="val">${fmtPrice(budget[k], plan.currency)}</div><div class="lbl">${lbl}</div></div>` : "").join("");
+
+  return `
+    <section class="section">
+      <h3 class="section-title">🗓️ خطة رحلتك إلى ${plan.destination || ""}</h3>
+      ${plan.is_mock ? '<div class="mock-banner">⚠️ هذه الخطة تجريبية تم إنشاؤها بوضع عرض بدون مزود ذكاء اصطناعي خارجي.</div>' : ''}
+      ${days}
+      <h4 style="margin-top:26px;">تقدير الميزانية</h4>
+      <div class="budget-breakdown">${budgetItems}</div>
+      <div class="budget-total">
+        <span>إجمالي الميزانية المتوقعة</span>
+        <span>${fmtPrice(plan.total_estimated_budget, plan.currency)}</span>
+      </div>
+    </section>
+  `;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,71 @@
+{% extends "_base.html" %}
+{% block title %}تسجيل الدخول — رحلاتي الذكية{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+  <h1 id="authTitle">تسجيل الدخول</h1>
+  <p class="sub" id="authSub">أهلًا بعودتك، سجّل دخولك للمتابعة</p>
+  <div id="authAlert"></div>
+
+  <form id="loginForm">
+    <div class="field"><label for="loginEmail">البريد الإلكتروني</label><input type="email" id="loginEmail" required></div>
+    <div class="field"><label for="loginPassword">كلمة المرور</label><input type="password" id="loginPassword" required></div>
+    <button class="btn btn-primary btn-block" type="submit">تسجيل الدخول</button>
+  </form>
+
+  <form id="registerForm" style="display:none;">
+    <div class="field"><label for="regName">الاسم الكامل</label><input type="text" id="regName" required></div>
+    <div class="field"><label for="regEmail">البريد الإلكتروني</label><input type="email" id="regEmail" required></div>
+    <div class="field"><label for="regPassword">كلمة المرور</label><input type="password" id="regPassword" minlength="6" required></div>
+    <button class="btn btn-primary btn-block" type="submit">إنشاء حساب</button>
+  </form>
+
+  <div class="auth-switch">
+    <span id="switchText">ليس لديك حساب؟</span>
+    <a href="#" id="switchLink">إنشاء حساب جديد</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let mode = "login";
+const switchLink = document.getElementById("switchLink");
+switchLink.addEventListener("click", (e) => {
+  e.preventDefault();
+  mode = mode === "login" ? "register" : "login";
+  document.getElementById("loginForm").style.display = mode === "login" ? "block" : "none";
+  document.getElementById("registerForm").style.display = mode === "register" ? "block" : "none";
+  document.getElementById("authTitle").textContent = mode === "login" ? "تسجيل الدخول" : "إنشاء حساب جديد";
+  document.getElementById("authSub").textContent = mode === "login" ? "أهلًا بعودتك، سجّل دخولك للمتابعة" : "أنشئ حسابك للبدء في التخطيط لرحلاتك";
+  document.getElementById("switchText").textContent = mode === "login" ? "ليس لديك حساب؟" : "لديك حساب بالفعل؟";
+  switchLink.textContent = mode === "login" ? "إنشاء حساب جديد" : "تسجيل الدخول";
+  document.getElementById("authAlert").innerHTML = "";
+});
+
+document.getElementById("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const alertBox = document.getElementById("authAlert");
+  try {
+    await Api.login(document.getElementById("loginEmail").value, document.getElementById("loginPassword").value);
+    window.location.href = "/";
+  } catch (err) {
+    alertBox.innerHTML = `<div class="alert alert-error">${err.message}</div>`;
+  }
+});
+
+document.getElementById("registerForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const alertBox = document.getElementById("authAlert");
+  try {
+    await Api.register(
+      document.getElementById("regName").value,
+      document.getElementById("regEmail").value,
+      document.getElementById("regPassword").value
+    );
+    window.location.href = "/";
+  } catch (err) {
+    alertBox.innerHTML = `<div class="alert alert-error">${err.message}</div>`;
+  }
+});
+</script>
+{% endblock %}

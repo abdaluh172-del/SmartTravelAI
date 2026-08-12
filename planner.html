@@ -1,0 +1,100 @@
+{% extends "_base.html" %}
+{% block title %}خطط لي رحلتي — رحلاتي الذكية{% endblock %}
+{% block content %}
+
+<section class="assistant-hero">
+  <div class="container">
+    <h1>🗓️ خطط لي رحلتي</h1>
+    <p>أدخل تفاصيل رحلتك وسننشئ لك جدولًا يوميًا مخصصًا</p>
+  </div>
+</section>
+
+<div class="container" style="max-width:760px;">
+  <div class="search-card">
+    <form id="plannerForm">
+      <div class="form-grid">
+        <div class="field full">
+          <label for="destination">الوجهة</label>
+          <input type="text" id="destination" placeholder="مثال: دبي" required>
+        </div>
+        <div class="field">
+          <label for="days">عدد الأيام</label>
+          <input type="number" id="days" min="1" max="30" value="3" required>
+        </div>
+        <div class="field">
+          <label for="budget">الميزانية (ريال)</label>
+          <input type="number" id="budget" min="0" value="3000" required>
+        </div>
+        <div class="field">
+          <label for="tripType">نوع الرحلة</label>
+          <select id="tripType">
+            <option value="فردية">فردية</option>
+            <option value="عائلية">عائلية</option>
+            <option value="أصدقاء">أصدقاء</option>
+            <option value="عمل">عمل</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="interests">الاهتمامات</label>
+          <input type="text" id="interests" placeholder="مثال: تسوق، مطاعم، طبيعة">
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block" style="margin-top:18px;">إنشاء جدول الرحلة</button>
+    </form>
+  </div>
+
+  <div id="planResult" style="margin-top:20px;"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById("plannerForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const box = document.getElementById("planResult");
+  box.innerHTML = `<div class="loading-spinner"></div>`;
+  try {
+    const plan = await Api.planTrip({
+      destination: document.getElementById("destination").value.trim(),
+      days: document.getElementById("days").value,
+      budget: document.getElementById("budget").value,
+      trip_type: document.getElementById("tripType").value,
+      interests: document.getElementById("interests").value.trim(),
+    });
+    box.innerHTML = renderPlanHtml(plan);
+  } catch (e) {
+    box.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+  }
+});
+
+function renderPlanHtml(plan) {
+  const days = (plan.daily_plan || []).map(day => `
+    <div class="day-block">
+      <div class="day-block-header">${day.title}</div>
+      <div class="day-block-body">
+        ${day.blocks.map(b => `<div class="day-item"><span class="time-tag">${b.time}</span><span>${b.activity}</span></div>`).join("")}
+      </div>
+    </div>
+  `).join("");
+
+  const budget = plan.budget_breakdown || {};
+  const labels = { flights: "الطيران", hotel: "الفندق", food: "الطعام", transport: "المواصلات", activities: "الأنشطة" };
+  const budgetItems = Object.entries(labels).map(([k, lbl]) => budget[k] !== undefined ?
+    `<div class="budget-item"><div class="val">${fmtPrice(budget[k], plan.currency)}</div><div class="lbl">${lbl}</div></div>` : "").join("");
+
+  return `
+    <section class="section" style="padding-top:0;">
+      <h3 class="section-title">جدول رحلتك إلى ${plan.destination || ""}</h3>
+      ${plan.is_mock ? '<div class="mock-banner">⚠️ هذه الخطة تجريبية تم إنشاؤها بوضع عرض بدون مزود ذكاء اصطناعي خارجي.</div>' : ''}
+      ${days}
+      <h4 style="margin-top:26px;">تقدير الميزانية</h4>
+      <div class="budget-breakdown">${budgetItems}</div>
+      <div class="budget-total">
+        <span>إجمالي الميزانية المتوقعة</span>
+        <span>${fmtPrice(plan.total_estimated_budget, plan.currency)}</span>
+      </div>
+    </section>
+  `;
+}
+</script>
+{% endblock %}

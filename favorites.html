@@ -1,0 +1,64 @@
+{% extends "_base.html" %}
+{% block title %}المفضلة — رحلاتي الذكية{% endblock %}
+{% block content %}
+<div class="container section">
+  <h1 class="section-title">❤️ المفضلة</h1>
+  <p class="section-sub">الرحلات والوجهات التي حفظتها</p>
+  <div id="favBox"><div class="loading-spinner"></div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+  const box = document.getElementById("favBox");
+  {% if not current_user %}
+  box.innerHTML = `<div class="empty-state"><div class="icon">🔒</div>يجب <a href="/login" style="color:var(--amber-dark);font-weight:700;">تسجيل الدخول</a> لعرض المفضلة</div>`;
+  return;
+  {% endif %}
+
+  try {
+    const favs = await Api.favorites();
+    if (!favs.length) {
+      box.innerHTML = `<div class="empty-state"><div class="icon">🤍</div>لم تقم بحفظ أي عناصر في المفضلة بعد</div>`;
+      return;
+    }
+    box.innerHTML = favs.map(f => favHtml(f)).join("");
+    box.querySelectorAll(".remove-fav").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        await Api.removeFavorite(btn.dataset.id);
+        btn.closest(".flight-card").remove();
+      });
+    });
+  } catch (e) {
+    box.innerHTML = `<div class="empty-state">تعذر تحميل المفضلة</div>`;
+  }
+});
+
+function favHtml(f) {
+  if (f.item_type === "flight" && f.item_data) {
+    const d = f.item_data;
+    return `
+      <div class="flight-card">
+        <div class="flight-card-main">
+          <div class="flight-card-airline"><strong>${d.airline_name_ar}</strong></div>
+          <div class="route-row">
+            <div class="route-point"><div class="time">${fmtTime(d.depart_time)}</div><div class="code">${d.origin}</div></div>
+            <div class="route-middle"><div class="flight-path"></div></div>
+            <div class="route-point"><div class="time">${fmtTime(d.arrive_time)}</div><div class="code">${d.destination}</div></div>
+          </div>
+        </div>
+        <div class="flight-card-side">
+          <div class="flight-price">${fmtPrice(d.price, d.currency)}</div>
+          <button class="btn btn-outline btn-sm remove-fav" data-id="${f.id}">إزالة</button>
+        </div>
+      </div>`;
+  }
+  return `
+    <div class="flight-card">
+      <div class="flight-card-main"><strong>${f.item_ref}</strong></div>
+      <div class="flight-card-side"><button class="btn btn-outline btn-sm remove-fav" data-id="${f.id}">إزالة</button></div>
+    </div>`;
+}
+</script>
+{% endblock %}

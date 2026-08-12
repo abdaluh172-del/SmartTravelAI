@@ -1,0 +1,72 @@
+{% extends "_base.html" %}
+{% block title %}تفاصيل الرحلة — رحلاتي الذكية{% endblock %}
+{% block content %}
+<div class="container" style="padding-top:28px; max-width:760px;">
+  <div id="flightDetailBox"><div class="loading-spinner"></div></div>
+
+  <div style="margin-top:24px; text-align:center;">
+    <a href="/assistant" class="btn btn-primary" id="planCta">✨ خطط رحلتي بالكامل مع هذه الرحلة</a>
+    <button class="btn btn-outline" id="favBtn" style="margin-inline-start:10px;">🤍 أضف للمفضلة</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const flight = JSON.parse(sessionStorage.getItem("selectedFlight") || "null");
+  const box = document.getElementById("flightDetailBox");
+  if (!flight) {
+    box.innerHTML = `<div class="empty-state"><div class="icon">😕</div>لم يتم العثور على تفاصيل هذه الرحلة، الرجاء البحث مجددًا.</div>`;
+    return;
+  }
+
+  const stopsLabel = flight.stops === 0 ? "مباشرة" : flight.stops === 1 ? "توقف واحد" : `${flight.stops} توقفات`;
+  box.innerHTML = `
+    <div class="flight-card" style="grid-template-columns:1fr;">
+      <div class="flight-card-main">
+        <div class="flight-card-airline">
+          <div class="airline-logo">✈️</div>
+          <strong>${flight.airline_name_ar} (${flight.airline_code})</strong>
+          <span class="stops-badge ${flight.stops === 0 ? 'direct' : ''}">${stopsLabel}</span>
+        </div>
+        <div class="route-row">
+          <div class="route-point">
+            <div class="time">${fmtTime(flight.depart_time)}</div>
+            <div class="code">${flight.origin}</div>
+          </div>
+          <div class="route-middle">
+            <div class="duration">${fmtDuration(flight.duration_minutes)}</div>
+            <div class="flight-path"></div>
+          </div>
+          <div class="route-point">
+            <div class="time">${fmtTime(flight.arrive_time)}</div>
+            <div class="code">${flight.destination}</div>
+          </div>
+        </div>
+        <div style="margin-top:18px; display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--line); padding-top:16px;">
+          <div>
+            <div style="color:var(--ink-soft); font-size:0.85rem;">درجة السفر: ${flight.cabin_class}</div>
+            ${flight.is_mock ? '<span class="mock-tag">بيانات تجريبية وليست حجزًا حقيقيًا</span>' : ''}
+          </div>
+          <div class="flight-price">${fmtPrice(flight.price, flight.currency)}</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("planCta").href = `/assistant?destination=${encodeURIComponent(flight.destination)}`;
+
+  document.getElementById("favBtn").addEventListener("click", async () => {
+    try {
+      await Api.addFavorite("flight", flight.id, flight);
+      const btn = document.getElementById("favBtn");
+      btn.textContent = "❤️ أُضيفت للمفضلة";
+      btn.classList.add("active");
+    } catch (e) {
+      if (e.status === 401) window.location.href = "/login";
+    }
+  });
+});
+</script>
+{% endblock %}

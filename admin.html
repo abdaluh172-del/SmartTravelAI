@@ -1,0 +1,108 @@
+{% extends "_base.html" %}
+{% block title %}لوحة الإدارة — رحلاتي الذكية{% endblock %}
+{% block content %}
+<div class="container section">
+  <h1 class="section-title">🛡️ لوحة الإدارة</h1>
+
+  {% if not current_user or not current_user.is_admin %}
+  <div class="empty-state"><div class="icon">🚫</div>غير مصرح لك بالوصول إلى هذه الصفحة</div>
+  {% else %}
+  <div class="stat-cards" id="statCards"></div>
+
+  <div class="admin-tabs">
+    <button class="active" data-panel="searches">عمليات البحث</button>
+    <button data-panel="airlines">شركات الطيران</button>
+    <button data-panel="users">المستخدمون</button>
+    <button data-panel="status">حالة APIs</button>
+  </div>
+
+  <div class="admin-panel active" id="panel-searches"><div class="loading-spinner"></div></div>
+  <div class="admin-panel" id="panel-airlines"></div>
+  <div class="admin-panel" id="panel-users"></div>
+  <div class="admin-panel" id="panel-status"></div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+  if (!document.getElementById("statCards")) return;
+
+  try {
+    const stats = await Api.adminStats();
+    document.getElementById("statCards").innerHTML = `
+      <div class="stat-card"><div class="num">${stats.users_count}</div><div class="lbl">المستخدمون</div></div>
+      <div class="stat-card"><div class="num">${stats.airlines_count}</div><div class="lbl">شركات الطيران</div></div>
+      <div class="stat-card"><div class="num">${stats.destinations_count}</div><div class="lbl">الوجهات</div></div>
+      <div class="stat-card"><div class="num">${stats.searches_count}</div><div class="lbl">عمليات البحث</div></div>
+      <div class="stat-card"><div class="num">${stats.trip_plans_count}</div><div class="lbl">خطط الرحلات</div></div>
+    `;
+  } catch (e) {}
+
+  loadPanel("searches");
+
+  document.querySelectorAll(".admin-tabs button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".admin-tabs button").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".admin-panel").forEach(p => p.classList.remove("active"));
+      btn.classList.add("active");
+      document.getElementById(`panel-${btn.dataset.panel}`).classList.add("active");
+      loadPanel(btn.dataset.panel);
+    });
+  });
+});
+
+const loaded = {};
+async function loadPanel(name) {
+  if (loaded[name]) return;
+  loaded[name] = true;
+  const panel = document.getElementById(`panel-${name}`);
+  panel.innerHTML = `<div class="loading-spinner"></div>`;
+
+  try {
+    if (name === "searches") {
+      const rows = await Api.adminSearches();
+      panel.innerHTML = tableHtml(
+        ["#", "من", "إلى", "تاريخ المغادرة", "المسافرون", "الدرجة", "عدد النتائج", "التاريخ"],
+        rows.map(r => [r.id, r.origin, r.destination, r.depart_date, r.passengers, r.cabin_class, r.results_count, r.created_at?.slice(0, 16)])
+      );
+    } else if (name === "airlines") {
+      const rows = await Api.adminAirlines();
+      panel.innerHTML = tableHtml(
+        ["الرمز", "الاسم", "الاسم بالعربي", "مفعّلة"],
+        rows.map(r => [r.code, r.name, r.name_ar, r.is_active ? "نعم" : "لا"])
+      );
+    } else if (name === "users") {
+      const rows = await Api.adminUsers();
+      panel.innerHTML = tableHtml(
+        ["#", "الاسم", "البريد الإلكتروني", "إداري", "تاريخ التسجيل"],
+        rows.map(r => [r.id, r.full_name, r.email, r.is_admin ? "نعم" : "لا", r.created_at?.slice(0, 10)])
+      );
+    } else if (name === "status") {
+      const s = await Api.adminProvidersStatus();
+      panel.innerHTML = `
+        <div class="table-wrap" style="padding:18px;">
+          <p><strong>مزود الرحلات النشط:</strong> ${s.active_flight_provider}</p>
+          <p><strong>مزود الذكاء الاصطناعي:</strong> ${s.ai_provider} ${s.ai_key_configured ? "(مفتاح API مضبوط)" : "(وضع تجريبي - بدون مفتاح API)"}</p>
+          <p><strong>مزودو الرحلات المسجلون:</strong></p>
+          <ul>${s.flight_providers.map(p => `<li>${p.key} — ${p.is_mock ? "تجريبي" : "حقيقي"}</li>`).join("")}</ul>
+        </div>`;
+    }
+  } catch (e) {
+    panel.innerHTML = `<div class="empty-state">تعذر تحميل البيانات</div>`;
+  }
+}
+
+function tableHtml(headers, rows) {
+  if (!rows.length) return `<div class="empty-state">لا توجد بيانات بعد</div>`;
+  return `
+    <div class="table-wrap">
+      <table>
+        <thead><tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr></thead>
+        <tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c ?? ""}</td>`).join("")}</tr>`).join("")}</tbody>
+      </table>
+    </div>`;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,196 @@
+{% extends "_base.html" %}
+{% block title %}رحلاتي الذكية — ابحث عن أفضل رحلات الطيران{% endblock %}
+{% block content %}
+
+<section class="hero">
+  <div class="container hero-inner">
+    <span class="hero-eyebrow">✨ يعمل بالذكاء الاصطناعي</span>
+    <h1>ابحث، قارن، وخطّط رحلتك <span class="accent">بذكاء</span></h1>
+    <p class="lead">منصة سفر تجمع لك أرخص رحلات الطيران، وتساعدك بالذكاء الاصطناعي على تخطيط رحلتك بالكامل من الألف إلى الياء.</p>
+  </div>
+</section>
+
+<div class="container">
+  <div class="search-card">
+    <div class="trip-type-toggle" id="tripTypeToggle">
+      <button type="button" class="active" data-type="roundtrip">ذهاب وعودة</button>
+      <button type="button" data-type="oneway">اتجاه واحد</button>
+    </div>
+
+    <form id="searchForm">
+      <div class="search-grid">
+        <div class="field origin-dest">
+          <label for="origin">من أين؟</label>
+          <input type="text" id="origin" placeholder="مدينة أو مطار المغادرة" autocomplete="off" required>
+          <div class="autocomplete-list" id="originList"></div>
+        </div>
+        <div class="field origin-dest">
+          <label for="destination">إلى أين؟</label>
+          <input type="text" id="destination" placeholder="مدينة أو مطار الوجهة" autocomplete="off" required>
+          <div class="autocomplete-list" id="destinationList"></div>
+        </div>
+        <div class="field">
+          <label for="departDate">تاريخ المغادرة</label>
+          <input type="date" id="departDate" required>
+        </div>
+        <div class="field" id="returnDateField">
+          <label for="returnDate">تاريخ العودة</label>
+          <input type="date" id="returnDate">
+        </div>
+        <div class="field">
+          <label for="passengers">عدد المسافرين</label>
+          <select id="passengers">
+            {% for i in range(1,10) %}<option value="{{ i }}">{{ i }} مسافر</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="cabinClass">درجة السفر</label>
+          <select id="cabinClass">
+            <option value="economy">اقتصادية</option>
+            <option value="premium_economy">اقتصادية ممتازة</option>
+            <option value="business">رجال أعمال</option>
+            <option value="first">الدرجة الأولى</option>
+          </select>
+        </div>
+        <div class="search-submit-row">
+          <button type="submit" class="btn btn-primary">🔍 ابحث عن الرحلات</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<section class="section container">
+  <h2 class="section-title">لماذا رحلاتي الذكية؟</h2>
+  <p class="section-sub">كل ما تحتاجه لتخطيط رحلة كاملة في مكان واحد</p>
+  <div class="features-grid">
+    <div class="feature-card">
+      <span class="icon">💰</span>
+      <h3>أرخص الأسعار</h3>
+      <p>نرتب الرحلات دائمًا من الأرخص إلى الأغلى مع فلاتر متقدمة.</p>
+    </div>
+    <div class="feature-card">
+      <span class="icon">🤖</span>
+      <h3>مساعد سفر ذكي</h3>
+      <p>يخطط لك جدول رحلتك اليومي بالكامل حسب اهتماماتك وميزانيتك.</p>
+    </div>
+    <div class="feature-card">
+      <span class="icon">⚖️</span>
+      <h3>مقارنة ذكية</h3>
+      <p>لا نقارن بالسعر فقط، بل بالوقت والراحة والقيمة الإجمالية.</p>
+    </div>
+    <div class="feature-card">
+      <span class="icon">📊</span>
+      <h3>ميزانية شاملة</h3>
+      <p>تقدير تكلفة الرحلة كاملة: طيران، فندق، طعام، ومواصلات.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section container" style="padding-top:0">
+  <h2 class="section-title">وجهات رائجة</h2>
+  <p class="section-sub">استلهم رحلتك القادمة من أشهر الوجهات</p>
+  <div class="destinations-grid" id="destinationsGrid">
+    <div class="loading-spinner"></div>
+  </div>
+</section>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const today = new Date().toISOString().split("T")[0];
+  document.getElementById("departDate").min = today;
+  document.getElementById("returnDate").min = today;
+  document.getElementById("departDate").value = today;
+
+  let tripType = "roundtrip";
+  document.querySelectorAll("#tripTypeToggle button").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#tripTypeToggle button").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      tripType = btn.dataset.type;
+      document.getElementById("returnDateField").style.display = tripType === "oneway" ? "none" : "flex";
+    });
+  });
+
+  setupAutocomplete("origin", "originList");
+  setupAutocomplete("destination", "destinationList");
+
+  function setupAutocomplete(inputId, listId) {
+    const input = document.getElementById(inputId);
+    const list = document.getElementById(listId);
+    let selectedCode = "";
+    input.dataset.code = "";
+
+    input.addEventListener("input", async () => {
+      const q = input.value.trim();
+      selectedCode = "";
+      input.dataset.code = "";
+      if (q.length < 1) { list.classList.remove("open"); return; }
+      try {
+        const airports = await Api.airports(q);
+        if (!airports.length) { list.classList.remove("open"); return; }
+        list.innerHTML = airports.map(a =>
+          `<button type="button" data-code="${a.code}" data-label="${a.city_ar} (${a.code})">${a.city_ar} — ${a.country_ar} (${a.code})</button>`
+        ).join("");
+        list.classList.add("open");
+      } catch (e) { list.classList.remove("open"); }
+    });
+
+    list.addEventListener("click", (e) => {
+      const btn = e.target.closest("button");
+      if (!btn) return;
+      input.value = btn.dataset.label;
+      input.dataset.code = btn.dataset.code;
+      list.classList.remove("open");
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!list.contains(e.target) && e.target !== input) list.classList.remove("open");
+    });
+  }
+
+  document.getElementById("searchForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const origin = document.getElementById("origin");
+    const destination = document.getElementById("destination");
+    const state = {
+      origin: origin.dataset.code || origin.value,
+      origin_label: origin.value,
+      destination: destination.dataset.code || destination.value,
+      destination_label: destination.value,
+      depart_date: document.getElementById("departDate").value,
+      return_date: tripType === "roundtrip" ? document.getElementById("returnDate").value : null,
+      passengers: document.getElementById("passengers").value,
+      cabin_class: document.getElementById("cabinClass").value,
+      trip_type: tripType,
+    };
+    setSearchState(state);
+    window.location.href = "/results";
+  });
+
+  loadDestinations();
+  async function loadDestinations() {
+    const grid = document.getElementById("destinationsGrid");
+    try {
+      const dests = await Api.destinations();
+      grid.innerHTML = dests.map(d => `
+        <a class="destination-card" href="/destination?code=${d.airport_code}">
+          <img src="${d.image_url}" alt="${d.city_ar}" loading="lazy">
+          <div class="overlay">
+            <div>
+              <h3>${d.city_ar}</h3>
+              <span>${d.country}</span>
+            </div>
+          </div>
+        </a>
+      `).join("");
+    } catch (e) {
+      grid.innerHTML = `<div class="empty-state"><div class="icon">🌍</div>تعذر تحميل الوجهات حاليًا</div>`;
+    }
+  }
+});
+</script>
+{% endblock %}
